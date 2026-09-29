@@ -4,65 +4,130 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-function getReferer(platform: string) {
-  switch (platform) {
-    case 'tiktok':
-    case 'douyin':
-      return 'https://www.tiktok.com/';
-
-    case 'instagram':
-      return 'https://www.instagram.com/';
-
-    case 'youtube':
-      return 'https://www.youtube.com/';
-
-    case 'twitter':
-      return 'https://x.com/';
-
-    case 'facebook':
-      return 'https://www.facebook.com/';
-
-    case 'pinterest':
-      return 'https://www.pinterest.com/';
-
-    case 'bilibili':
-      return 'https://www.bilibili.com/';
-
-    case 'reddit':
-      return 'https://www.reddit.com/';
-
-    case 'spotify':
-      return 'https://open.spotify.com/';
-
-    default:
-      return undefined;
-  }
-}
-
 function safeFilename(value: string) {
   return value
     .replace(/[^a-zA-Z0-9._-]+/g, '_')
-    .slice(0, 80);
+    .slice(0, 100);
+}
+
+function getHeaders(
+  platform: string,
+  range?: string | null
+): HeadersInit {
+  const headers: HeadersInit = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+
+    Accept:
+      'video/*,audio/*,image/*,application/octet-stream,*/*',
+
+    'Accept-Language':
+      'en-US,en;q=0.9',
+
+    Connection: 'keep-alive'
+  };
+
+  switch (platform) {
+    case 'tiktok':
+      headers.Referer =
+        'https://www.tiktok.com/';
+      headers.Origin =
+        'https://www.tiktok.com/';
+      break;
+
+    case 'douyin':
+      headers.Referer =
+        'https://www.douyin.com/';
+      headers.Origin =
+        'https://www.douyin.com/';
+      break;
+
+    case 'instagram':
+      headers.Referer =
+        'https://www.instagram.com/';
+      headers.Origin =
+        'https://www.instagram.com/';
+      break;
+
+    case 'youtube':
+      headers.Referer =
+        'https://www.youtube.com/';
+      headers.Origin =
+        'https://www.youtube.com/';
+      break;
+
+    case 'bilibili':
+      headers.Referer =
+        'https://www.bilibili.com/';
+      headers.Origin =
+        'https://www.bilibili.com/';
+      break;
+
+    case 'twitter':
+      headers.Referer =
+        'https://x.com/';
+      headers.Origin =
+        'https://x.com/';
+      break;
+
+    default:
+      break;
+  }
+
+  if (range) {
+    headers.Range = range;
+  }
+
+  return headers;
+}
+
+async function fetchMedia(
+  target: string,
+  platform: string,
+  range?: string | null
+) {
+  const headers =
+    getHeaders(platform, range);
+
+  return fetch(target, {
+    method: 'GET',
+    headers,
+    redirect: 'follow',
+    cache: 'no-store'
+  });
 }
 
 export async function GET(req: Request) {
   try {
-    const requestUrl = new URL(req.url);
+    const requestUrl =
+      new URL(req.url);
 
-    const mediaUrl = requestUrl.searchParams.get('url');
+    const mediaUrl =
+      requestUrl.searchParams.get(
+        'url'
+      );
+
     const platform =
-      requestUrl.searchParams.get('platform') || '';
-    const download =
-      requestUrl.searchParams.get('download') === '1';
+      requestUrl.searchParams
+        .get('platform')
+        ?.toLowerCase() || '';
+
     const filename =
-      requestUrl.searchParams.get('filename') ||
-      'aixi-download';
+      requestUrl.searchParams.get(
+        'filename'
+      ) || 'aixi-download';
+
+    const forceDownload =
+      requestUrl.searchParams.get(
+        'download'
+      ) === '1';
 
     if (!mediaUrl) {
       return NextResponse.json(
         {
           status: false,
-          message: 'Media URL tidak ditemukan.'
+          message:
+            'Media URL tidak ditemukan.'
         },
         { status: 400 }
       );
@@ -71,145 +136,190 @@ export async function GET(req: Request) {
     let target: URL;
 
     try {
-      target = new URL(mediaUrl);
+      target =
+        new URL(mediaUrl);
     } catch {
       return NextResponse.json(
         {
           status: false,
-          message: 'Media URL tidak valid.'
+          message:
+            'Media URL tidak valid.'
         },
         { status: 400 }
       );
     }
 
-    if (!['http:', 'https:'].includes(target.protocol)) {
+    if (
+      !['http:', 'https:'].includes(
+        target.protocol
+      )
+    ) {
       return NextResponse.json(
         {
           status: false,
-          message: 'Protocol media tidak didukung.'
+          message:
+            'Protocol media tidak didukung.'
         },
         { status: 400 }
       );
     }
 
-    const referer = getReferer(platform);
+    const range =
+      req.headers.get('range');
 
-    const headers: HeadersInit = {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
-      Accept:
-        'video/*,audio/*,image/*,application/octet-stream,*/*'
-    };
+    /*
+     * Request pertama.
+     */
+    let upstream =
+      await fetchMedia(
+        target.toString(),
+        platform,
+        range
+      );
 
-    if (referer) {
-      headers.Referer = referer;
+    /*
+     * TikTok CDN kadang lebih sensitif
+     * terhadap header tertentu.
+     *
+     * Retry dengan header minimal.
+     */
+    if (
+      !upstream.ok &&
+      platform === 'tiktok'
+    ) {
+      upstream = await fetch(
+        target.toString(),
+        {
+          method: 'GET',
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1',
+
+            Accept:
+              '*/*',
+
+            Referer:
+              'https://www.tiktok.com/'
+          },
+
+          redirect: 'follow',
+          cache: 'no-store'
+        }
+      );
     }
 
     /*
-     * Kalau browser mengirim Range, teruskan.
-     * Ini membantu video/media besar.
+     * Retry terakhir tanpa referer.
      */
-    const range = req.headers.get('range');
+    if (!upstream.ok) {
+      const fallbackHeaders: HeadersInit = {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
 
-    if (range) {
-      headers.Range = range;
-    }
-
-    let response = await fetch(target.toString(), {
-      headers,
-      redirect: 'follow',
-      cache: 'no-store'
-    });
-
-    /*
-     * Retry tanpa Referer.
-     * Beberapa CDN justru menolak request yang punya referer.
-     */
-    if (!response.ok && referer) {
-      const retryHeaders: HeadersInit = {
-        'User-Agent': headers['User-Agent'],
-        Accept: headers.Accept
+        Accept: '*/*'
       };
 
       if (range) {
-        retryHeaders.Range = range;
+        fallbackHeaders.Range =
+          range;
       }
 
-      response = await fetch(target.toString(), {
-        headers: retryHeaders,
-        redirect: 'follow',
-        cache: 'no-store'
-      });
+      upstream = await fetch(
+        target.toString(),
+        {
+          method: 'GET',
+          headers:
+            fallbackHeaders,
+          redirect: 'follow',
+          cache: 'no-store'
+        }
+      );
     }
 
-    if (!response.ok) {
+    if (!upstream.ok) {
       return NextResponse.json(
         {
           status: false,
-          message: `Media server mengembalikan HTTP ${response.status}.`
+          message:
+            `Media server mengembalikan HTTP ${upstream.status}.`
         },
         { status: 502 }
       );
     }
 
+    const headers =
+      new Headers();
+
     const contentType =
-      response.headers.get('content-type') ||
-      'application/octet-stream';
-
-    const responseHeaders = new Headers();
-
-    responseHeaders.set(
-      'Content-Type',
-      contentType
-    );
+      upstream.headers.get(
+        'content-type'
+      );
 
     const contentLength =
-      response.headers.get('content-length');
+      upstream.headers.get(
+        'content-length'
+      );
+
+    const contentRange =
+      upstream.headers.get(
+        'content-range'
+      );
+
+    if (contentType) {
+      headers.set(
+        'Content-Type',
+        contentType
+      );
+    } else {
+      headers.set(
+        'Content-Type',
+        'application/octet-stream'
+      );
+    }
 
     if (contentLength) {
-      responseHeaders.set(
+      headers.set(
         'Content-Length',
         contentLength
       );
     }
 
-    const contentRange =
-      response.headers.get('content-range');
-
     if (contentRange) {
-      responseHeaders.set(
+      headers.set(
         'Content-Range',
         contentRange
       );
     }
 
-    responseHeaders.set(
+    headers.set(
       'Accept-Ranges',
       'bytes'
     );
 
-    responseHeaders.set(
+    headers.set(
       'Cache-Control',
       'no-store, max-age=0'
     );
 
-    if (download) {
-      const cleanName = safeFilename(filename);
+    if (forceDownload) {
+      const cleanName =
+        safeFilename(filename);
 
-      responseHeaders.set(
+      headers.set(
         'Content-Disposition',
         `attachment; filename="${cleanName}"`
       );
     }
 
     return new Response(
-      response.body,
+      upstream.body,
       {
-        status: response.status,
-        headers: responseHeaders
+        status:
+          upstream.status,
+        headers
       }
     );
-  } catch (error: unknown) {
+  } catch (error) {
     return NextResponse.json(
       {
         status: false,
