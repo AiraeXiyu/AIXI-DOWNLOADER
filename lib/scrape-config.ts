@@ -1,4 +1,7 @@
-export const SCRAPER_METHODS: Record<string, string[]> = {
+export const SCRAPER_METHODS: Record<
+  string,
+  string[]
+> = {
   tiktok: [
     'snaptik',
     'tiktokio',
