@@ -30,13 +30,20 @@ export default function DownloaderClient({
   /*
    * TikTok:
    * Hanya gunakan download pertama.
-   *
-   * Biasanya item pertama adalah link
-   * yang sebelumnya tampil sebagai "Normal"
-   * dan terbukti bisa didownload.
    */
   const isTikTok =
     platform.slug.toLowerCase() === 'tiktok';
+
+  /*
+   * Instagram:
+   * URL hasil scraper biasanya merupakan URL CDN
+   * yang sudah memiliki token/signature sendiri.
+   *
+   * Jangan lewat /api/media karena proxy Vercel
+   * dapat menyebabkan CDN membalas HTTP 403.
+   */
+  const isInstagram =
+    platform.slug.toLowerCase() === 'instagram';
 
   const usableDownloads: DownloadItem[] =
     isTikTok
@@ -63,11 +70,19 @@ export default function DownloaderClient({
         },
         body: JSON.stringify({
           platform: platform.slug,
-          url
+          url: url.trim()
         })
       });
 
-      const json = await res.json();
+      let json: any = null;
+
+      try {
+        json = await res.json();
+      } catch {
+        throw new Error(
+          'Server mengembalikan response yang tidak valid.'
+        );
+      }
 
       if (!res.ok || !json.status) {
         throw new Error(
@@ -94,13 +109,39 @@ export default function DownloaderClient({
       filename?: string;
     }
   ) {
+    /*
+     * INSTAGRAM
+     *
+     * Jangan proxy melalui /api/media.
+     *
+     * URL Instagram dari scraper bisa berupa
+     * signed CDN URL. Kalau URL tersebut diambil
+     * ulang oleh server Vercel, CDN bisa membalas
+     * HTTP 403.
+     *
+     * Untuk Instagram, gunakan URL asli.
+     */
+    if (isInstagram) {
+      return mediaUrl;
+    }
+
     const params = new URLSearchParams();
 
-    params.set('url', mediaUrl);
-    params.set('platform', platform.slug);
+    params.set(
+      'url',
+      mediaUrl
+    );
+
+    params.set(
+      'platform',
+      platform.slug
+    );
 
     if (options?.download) {
-      params.set('download', '1');
+      params.set(
+        'download',
+        '1'
+      );
     }
 
     if (options?.filename) {
@@ -457,7 +498,12 @@ export default function DownloaderClient({
               className="primary-btn download-now"
               href={downloadUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
+              download={
+                isInstagram
+                  ? true
+                  : undefined
+              }
             >
               {isTikTok
                 ? 'Download HD ↓'
