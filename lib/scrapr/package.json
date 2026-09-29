@@ -1,0 +1,9 @@
+{
+  "name": "@coflyn/scrapr",
+  "version": "1.1.0",
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0"
+  }
+}
