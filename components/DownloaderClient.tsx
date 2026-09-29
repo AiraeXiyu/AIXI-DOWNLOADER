@@ -27,6 +27,22 @@ export default function DownloaderClient({
     [data]
   );
 
+  /*
+   * TikTok:
+   * Hanya gunakan download pertama.
+   *
+   * Biasanya item pertama adalah link
+   * yang sebelumnya tampil sebagai "Normal"
+   * dan terbukti bisa didownload.
+   */
+  const isTikTok =
+    platform.slug.toLowerCase() === 'tiktok';
+
+  const usableDownloads: DownloadItem[] =
+    isTikTok
+      ? downloads.slice(0, 1)
+      : downloads;
+
   async function analyze() {
     setError('');
     setData(null);
@@ -103,8 +119,6 @@ export default function DownloaderClient({
 
   /*
    * Thumbnail utama.
-   * Kalau scraper tidak menyediakan result.thumbnail,
-   * ambil thumbnail dari item download.
    */
   const rawThumbnail =
     data?.result?.thumbnail ||
@@ -116,7 +130,7 @@ export default function DownloaderClient({
     '';
 
   const selectedDownload =
-    downloads[selected];
+    usableDownloads[selected];
 
   const downloadUrl =
     selectedDownload?.url
@@ -327,71 +341,115 @@ export default function DownloaderClient({
             </p>
           </div>
 
-          <div className="quality-head">
-            <b>
-              Pilih kualitas
-            </b>
+          {isTikTok ? (
+            <>
+              <div className="quality-head">
+                <b>
+                  TikTok HD
+                </b>
 
-            <span>
-              {downloads.length}{' '}
-              opsi
-            </span>
-          </div>
+                <span>
+                  1 opsi
+                </span>
+              </div>
 
-          {downloads.length > 0 ? (
-            <div className="download-list">
-              {downloads.map(
-                (
-                  download,
-                  index
-                ) => (
-                  <button
-                    type="button"
-                    className={`download-option ${
-                      selected === index
-                        ? 'selected'
-                        : ''
-                    }`}
-                    key={
-                      download.id ||
-                      `${index}-${download.url}`
-                    }
-                    onClick={() =>
-                      setSelected(
-                        index
-                      )
-                    }
+              {usableDownloads.length > 0 ? (
+                <div className="download-list">
+                  <div
+                    className="download-option selected"
                   >
                     <span className="radio-dot" />
 
                     <span>
                       <b>
-                        {download.quality ||
-                          `Download ${
-                            index + 1
-                          }`}
+                        HD
                       </b>
 
                       <small>
-                        {download.type ||
-                          'media'}
+                        Video
                       </small>
                     </span>
 
                     <strong>
-                      {selected ===
-                      index
-                        ? '✓'
-                        : '○'}
+                      ✓
                     </strong>
-                  </button>
-                )
+                  </div>
+                </div>
+              ) : (
+                <div className="error">
+                  Tidak ada pilihan download.
+                </div>
               )}
-            </div>
+            </>
           ) : (
-            <div className="error">
-              Tidak ada pilihan download.
-            </div>
+            <>
+              <div className="quality-head">
+                <b>
+                  Pilih kualitas
+                </b>
+
+                <span>
+                  {usableDownloads.length}{' '}
+                  opsi
+                </span>
+              </div>
+
+              {usableDownloads.length > 0 ? (
+                <div className="download-list">
+                  {usableDownloads.map(
+                    (
+                      download,
+                      index
+                    ) => (
+                      <button
+                        type="button"
+                        className={`download-option ${
+                          selected === index
+                            ? 'selected'
+                            : ''
+                        }`}
+                        key={
+                          download.id ||
+                          `${index}-${download.url}`
+                        }
+                        onClick={() =>
+                          setSelected(
+                            index
+                          )
+                        }
+                      >
+                        <span className="radio-dot" />
+
+                        <span>
+                          <b>
+                            {download.quality ||
+                              `Download ${
+                                index + 1
+                              }`}
+                          </b>
+
+                          <small>
+                            {download.type ||
+                              'media'}
+                          </small>
+                        </span>
+
+                        <strong>
+                          {selected ===
+                          index
+                            ? '✓'
+                            : '○'}
+                        </strong>
+                      </button>
+                    )
+                  )}
+                </div>
+              ) : (
+                <div className="error">
+                  Tidak ada pilihan download.
+                </div>
+              )}
+            </>
           )}
 
           {downloadUrl && (
@@ -401,7 +459,9 @@ export default function DownloaderClient({
               target="_blank"
               rel="noreferrer"
             >
-              Download Sekarang ↓
+              {isTikTok
+                ? 'Download HD ↓'
+                : 'Download Sekarang ↓'}
             </a>
           )}
         </section>
