@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  serverExternalPackages: ['@coflyn/scrapr']
-};
+
+const nextConfig = {};
+
 export default nextConfig;
